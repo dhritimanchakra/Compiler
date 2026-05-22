@@ -32,6 +32,12 @@ typedef struct Member Member;
 typedef struct Relocation Relocation;
 typedef struct Hideset Hideset;
 
+typedef struct {
+  char **data;
+  int capacity;
+  int len;
+} StringArray;
+
 
 typedef enum{
     TK_IDENT,
@@ -90,9 +96,8 @@ Token *tokenize_string_literal(Token *tok,Type *basety);
 Token *tokenize(File *file);
 Token *tokenize_file(char *filename);
 
-#define unreachable(){
-    error("internal error at %s:%d",__FILE__,__LINE__);
-}
+#define unreachable() \
+  error("internal error at %s:%d", __FILE__, __LINE__)
 
 
 char *search_include_paths(char *filename);
