@@ -187,3 +187,178 @@ typedef enum {
   ND_CAS,       // Atomic compare-and-swap
   ND_EXCH,      // Atomic exchange
 } NodeKind;
+
+
+struct Node{
+    NodeKind kind;
+    Node *next;
+    Type *ty;
+    Token *tok;
+    Node *lhs;
+    Node *rhs;
+    Node *cond;
+    Node *then;
+    Node *els;
+    Node *init;
+    Node *inc;
+    char *brk_label;
+    char *cont_label;
+
+    Node *body;
+    Member *member;
+    Type *func_ty;
+    Node *args;
+    bool pass_by_stack;
+    Obj *ret_buffer;
+
+    char *label;
+    char *unique_label;
+    Node *goto_next;
+
+    Node *case_next;
+    Node *case_default;
+    long begin;
+    long end;
+    char *asm_str;
+    Node *cas_addr;
+    Node *cas_old;
+    Node *cas_new;
+
+    Obj *var;
+    Obj *atomic_addr;
+    Node *atomic_expr;
+    int64_t val;
+    long double fval;
+
+
+};
+
+Node *new_cast(Node *expr,Type *ty);
+int64_t const_expr(Token **res,Token *tok);
+Obj *parse(Token *tok);
+
+
+typedef enum{
+TY_VOID,
+  TY_BOOL,
+  TY_CHAR,
+  TY_SHORT,
+  TY_INT,
+  TY_LONG,
+  TY_FLOAT,
+  TY_DOUBLE,
+  TY_LDOUBLE,
+  TY_ENUM,
+  TY_PTR,
+  TY_FUNC,
+  TY_ARRAY,
+  TY_VLA, // variable-length array
+  TY_STRUCT,
+  TY_UNION,
+} TypeKind;
+
+struct Type{
+    TypeKind kind;
+    int size;
+    int align;
+    bool is_unsigned;
+    bool is_atomic;
+    Type *origin;
+    Type *base;
+    Token *name;
+    Token *name_pos;
+    int array_len;
+    Node *vla_len;
+    Obj *vla_size;
+    Member *members;
+    bool is_flexible;
+    bool is_packed;
+    Type *return_ty;
+    Type *params;
+    bool is_variadic;
+    Type *next;
+
+
+};
+
+struct Member {
+  Member *next;
+  Type *ty;
+  Token *tok; // for error message
+  Token *name;
+  int idx;
+  int align;
+  int offset;
+
+
+  bool is_bitfield;
+  int bit_offset;
+  int bit_width;
+};
+
+extern Type *ty_void;
+extern Type *ty_bool;
+
+extern Type *ty_char;
+extern Type *ty_short;
+extern Type *ty_int;
+extern Type *ty_long;
+
+extern Type *ty_uchar;
+extern Type *ty_ushort;
+extern Type *ty_uint;
+extern Type *ty_ulong;
+
+extern Type *ty_float;
+extern Type *ty_double;
+extern Type *ty_ldouble;
+
+bool is_integer(Type *ty);
+bool is_flonum(Type *ty);
+bool is_numeric(Type *ty);
+bool is_compatible(Type *t1, Type *t2);
+Type *copy_type(Type *ty);
+Type *pointer_to(Type *base);
+Type *func_type(Type *return_ty);
+Type *array_of(Type *base, int size);
+Type *vla_of(Type *base, Node *expr);
+Type *enum_type(void);
+Type *struct_type(void);
+void add_type(Node *node);
+
+
+void codegen(Obj *prog,FILE *out);
+int align_to(int n,int align);
+
+int encode_utf8(char *buf,uint32_t c);
+uint32_t decode_utf8(char **new_pos,char *p);
+bool is_ident1(uint32_t c);
+bool is_ident2(uint32_t c);
+int display_width(char *p, int len);
+
+typedef struct{
+    char *key;
+    int keylen;
+    void *val;
+
+}HashEntry;
+typedef struct {
+  HashEntry *buckets;
+  int capacity;
+  int used;
+} HashMap;
+
+
+void *hashmap_get(HashMap *map, char *key);
+void *hashmap_get2(HashMap *map, char *key, int keylen);
+void hashmap_put(HashMap *map, char *key, void *val);
+void hashmap_put2(HashMap *map, char *key, int keylen, void *val);
+void hashmap_delete(HashMap *map, char *key);
+void hashmap_delete2(HashMap *map, char *key, int keylen);
+void hashmap_test(void);
+
+bool file_exists(char *path);
+extern StringArray include_paths;
+extern bool opt_fpic;
+extern bool opt_fcommon;
+extern char *base_file;
