@@ -555,3 +555,90 @@ static void canonicalize_newline(char *p) {
 
   p[j] = '\0';
 }
+
+
+
+static void remove_backslash_newline(char *p) {
+  int i = 0, j = 0;
+  int n = 0;
+
+  while (p[i]) {
+    if (p[i] == '\\' && p[i + 1] == '\n') {
+      i += 2;
+      n++;
+    } else if (p[i] == '\n') {
+      p[j++] = p[i++];
+      for (; n > 0; n--)
+        p[j++] = '\n';
+    } else {
+      p[j++] = p[i++];
+    }
+  }
+
+  for (; n > 0; n--)
+    p[j++] = '\n';
+  p[j] = '\0';
+}
+static uint32_t read_universal_char(char *p, int len) {
+  uint32_t c = 0;
+  for (int i = 0; i < len; i++) {
+    if (!isxdigit(p[i]))
+      return 0;
+    c = (c << 4) | from_hex(p[i]);
+  }
+  return c;
+}
+static void convert_universal_chars(char *p) {
+  char *q = p;
+
+  while (*p) {
+    if (startswith(p, "\\u")) {
+      uint32_t c = read_universal_char(p + 2, 4);
+      if (c) {
+        p += 6;
+        q += encode_utf8(q, c);
+      } else {
+        *q++ = *p++;
+      }
+    } else if (startswith(p, "\\U")) {
+      uint32_t c = read_universal_char(p + 2, 8);
+      if (c) {
+        p += 10;
+        q += encode_utf8(q, c);
+      } else {
+        *q++ = *p++;
+      }
+    } else if (p[0] == '\\') {
+      *q++ = *p++;
+      *q++ = *p++;
+    } else {
+      *q++ = *p++;
+    }
+  }
+
+  *q = '\0';
+}
+
+
+Token *tokenize_file(char *path) {
+  char *p = read_file(path);
+  if (!p)
+    return NULL;
+
+  if (!memcmp(p, "\xef\xbb\xbf", 3))
+    p += 3;
+
+  canonicalize_newline(p);
+  remove_backslash_newline(p);
+  convert_universal_chars(p);
+
+  static int file_no;
+  File *file = new_file(path, file_no + 1, p);
+
+  input_files = realloc(input_files, sizeof(char *) * (file_no + 2));
+  input_files[file_no] = file;
+  input_files[file_no + 1] = NULL;
+  file_no++;
+
+  return tokenize(file);
+}
