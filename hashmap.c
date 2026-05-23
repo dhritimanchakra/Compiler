@@ -107,6 +107,44 @@ void hashmap_put2(HashMap *map,char *key,int keylen,void *val){
     ent->val=val;
 }
 
-void hashmap_remove(HashMap *map,char *key){
-    hashmap_remove2(map,key,strlen(key));
+void hashmap_delete(HashMap *map, char *key) {
+  hashmap_delete2(map, key, strlen(key));
+}
+
+void hashmap_delete2(HashMap *map, char *key, int keylen) {
+  HashEntry *ent = get_entry(map, key, keylen);
+  if (ent)
+    ent->key = TOMBSTONE;
+}
+
+
+void hashmap_test(void) {
+  HashMap *map = calloc(1, sizeof(HashMap));
+
+  for (int i = 0; i < 5000; i++)
+    hashmap_put(map, format("key %d", i), (void *)(size_t)i);
+  for (int i = 1000; i < 2000; i++)
+    hashmap_delete(map, format("key %d", i));
+  for (int i = 1500; i < 1600; i++)
+    hashmap_put(map, format("key %d", i), (void *)(size_t)i);
+  for (int i = 6000; i < 7000; i++)
+    hashmap_put(map, format("key %d", i), (void *)(size_t)i);
+
+  for (int i = 0; i < 1000; i++)
+    assert((size_t)hashmap_get(map, format("key %d", i)) == i);
+  for (int i = 1000; i < 1500; i++)
+    assert(hashmap_get(map, "no such key") == NULL);
+  for (int i = 1500; i < 1600; i++)
+    assert((size_t)hashmap_get(map, format("key %d", i)) == i);
+  for (int i = 1600; i < 2000; i++)
+    assert(hashmap_get(map, "no such key") == NULL);
+  for (int i = 2000; i < 5000; i++)
+    assert((size_t)hashmap_get(map, format("key %d", i)) == i);
+  for (int i = 5000; i < 6000; i++)
+    assert(hashmap_get(map, "no such key") == NULL);
+  for (int i = 6000; i < 7000; i++)
+    hashmap_put(map, format("key %d", i), (void *)(size_t)i);
+
+  assert(hashmap_get(map, "no such key") == NULL);
+  printf("OK\n");
 }
