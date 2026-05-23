@@ -409,3 +409,149 @@ Token *tokenize_string_literal(Token *tok, Type *basety) {
   t->next = tok->next;
   return t;
 }
+
+
+Token *tokenize(File *file) {
+  current_file = file;
+
+  char *p = file->contents;
+  Token head = {};
+  Token *cur = &head;
+
+  at_bol = true;
+  has_space = false;
+
+  while (*p) {
+    if (*p == '\n') {
+      p++;
+      at_bol = true;
+      has_space = false;
+      continue;
+    }
+
+    if (isspace(*p)) {
+      p++;
+      has_space = true;
+      continue;
+    }
+
+    if (isdigit(*p) || (*p == '.' && isdigit(p[1]))) {
+      char *q = p++;
+      for (;;) {
+        if (p[0] && p[1] && strchr("eEpP", p[0]) && strchr("+-", p[1]))
+          p += 2;
+        else if (isalnum(*p) || *p == '.')
+          p++;
+        else
+          break;
+      }
+      cur = cur->next = new_token(TK_PP_NUM, q, p);
+      continue;
+    }
+
+    if (*p == '"') {
+      cur = cur->next = read_string_literal(p, p);
+      p += cur->len;
+      continue;
+    }
+
+    if (startswith(p, "u8\"")) {
+      cur = cur->next = read_string_literal(p, p + 2);
+      p += cur->len;
+      continue;
+    }
+
+    if (startswith(p, "u\"")) {
+      cur = cur->next = read_utf16_string_literal(p, p + 1);
+      p += cur->len;
+      continue;
+    }
+
+    if (startswith(p, "L\"")) {
+      cur = cur->next = read_utf32_string_literal(p, p + 1, ty_int);
+      p += cur->len;
+      continue;
+    }
+
+    if (startswith(p, "U\"")) {
+      cur = cur->next = read_utf32_string_literal(p, p + 1, ty_uint);
+      p += cur->len;
+      continue;
+    }
+
+    if (*p == '\'') {
+      cur = cur->next = read_char_literal(p, p, ty_int);
+      cur->val = (char)cur->val;
+      p += cur->len;
+      continue;
+    }
+
+    if (startswith(p, "u'")) {
+      cur = cur->next = read_char_literal(p, p + 1, ty_ushort);
+      cur->val &= 0xffff;
+      p += cur->len;
+      continue;
+    }
+
+    if (startswith(p, "L'")) {
+      cur = cur->next = read_char_literal(p, p + 1, ty_int);
+      p += cur->len;
+      continue;
+    }
+
+    if (startswith(p, "U'")) {
+      cur = cur->next = read_char_literal(p, p + 1, ty_uint);
+      p += cur->len;
+      continue;
+    }
+
+    int ident_len = read_ident(p);
+    if (ident_len) {
+      cur = cur->next = new_token(TK_IDENT, p, p + ident_len);
+      p += cur->len;
+      continue;
+    }
+
+    int punct_len = read_punct(p);
+    if (punct_len) {
+      cur = cur->next = new_token(TK_PUNCT, p, p + punct_len);
+      p += cur->len;
+      continue;
+    }
+
+    error_at(p, "invalid token");
+  }
+
+  cur = cur->next = new_token(TK_EOF, p, p);
+  add_line_numbers(head.next);
+  return head.next;
+}
+
+File **get_input_files(void) {
+  return input_files;
+}
+File *new_file(char *name, int file_no, char *contents) {
+  File *file = calloc(1, sizeof(File));
+  file->name = name;
+  file->display_name = name;
+  file->file_no = file_no;
+  file->contents = contents;
+  return file;
+}
+static void canonicalize_newline(char *p) {
+  int i = 0, j = 0;
+
+  while (p[i]) {
+    if (p[i] == '\r' && p[i + 1] == '\n') {
+      i += 2;
+      p[j++] = '\n';
+    } else if (p[i] == '\r') {
+      i++;
+      p[j++] = '\n';
+    } else {
+      p[j++] = p[i++];
+    }
+  }
+
+  p[j] = '\0';
+}
