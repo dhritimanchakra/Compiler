@@ -379,3 +379,33 @@ static bool convert_pp_int(Token *tok) {
   tok->ty = ty;
   return true;
 }
+void convert_pp_tokens(Token *tok) {
+  for (Token *t = tok; t->kind != TK_EOF; t = t->next) {
+    if (is_keyword(t))
+      t->kind = TK_KEYWORD;
+    else if (t->kind == TK_PP_NUM)
+      convert_pp_number(t);
+  }
+}static void add_line_numbers(Token *tok) {
+  char *p = current_file->contents;
+  int n = 1;
+
+  do {
+    if (p == tok->loc) {
+      tok->line_no = n;
+      tok = tok->next;
+    }
+    if (*p == '\n')
+      n++;
+  } while (*p++);
+}
+
+Token *tokenize_string_literal(Token *tok, Type *basety) {
+  Token *t;
+  if (basety->size == 2)
+    t = read_utf16_string_literal(tok->loc, tok->loc);
+  else
+    t = read_utf32_string_literal(tok->loc, tok->loc, basety);
+  t->next = tok->next;
+  return t;
+}
