@@ -108,31 +108,38 @@ Token *preprocess(Token *tok);
 
 
 typedef struct Obj Obj;
+struct Obj {
+  Obj *next;
+  char *name;   
+  Type *ty;      
+  Token *tok;   
+  bool is_local;
+  int align;     
 
-struct Obj{
-    Obj *next;
-    char *name;
-    Type *ty;
-    Token *tok;
-    bool is_local;
-    int align;
-    int offset;
-    bool is_function;
-    bool is_tls;
-    char *init_data;
-    Relocation *rel;
-    bool is_inline;
-    Obj *params;
-    Node *body;
-    Obj *locals;
-    Obj *va_area;
-    Obj *alloca_bottom;
-    int stack_size;
-    bool is_live;
-    bool is_root;
-    StringArray refs;
+ 
+  int offset;
+
+
+  bool is_function;
+  bool is_definition;
+  bool is_static;
+
+ 
+  bool is_tentative;
+  bool is_tls;
+  char *init_data;
+  Relocation *rel;
+  bool is_inline;
+  Obj *params;
+  Node *body;
+  Obj *locals;
+  Obj *va_area;
+  Obj *alloca_bottom;
+  int stack_size;
+  bool is_live;
+  bool is_root;
+  StringArray refs;
 };
-
 typedef struct Relocation Relocation;
 
 struct Relocation{
@@ -194,49 +201,50 @@ typedef enum {
 } NodeKind;
 
 
-struct Node{
-    NodeKind kind;
-    Node *next;
-    Type *ty;
-    Token *tok;
-    Node *lhs;
-    Node *rhs;
-    Node *cond;
-    Node *then;
-    Node *els;
-    Node *init;
-    Node *inc;
-    char *brk_label;
-    char *cont_label;
+struct Node {
+  NodeKind kind; 
+  Node *next;   
+  Type *ty;     
+  Token *tok;    
 
-    Node *body;
-    Member *member;
-    Type *func_ty;
-    Node *args;
-    bool pass_by_stack;
-    Obj *ret_buffer;
+  Node *lhs;     
+  Node *rhs;    
+  Node *cond;
+  Node *then;
+  Node *els;
+  Node *init;
+  Node *inc;
+  char *brk_label;
+  char *cont_label;
+  Node *body;
+  Member *member;
+  Type *func_ty;
+  Node *args;
+  bool pass_by_stack;
+  Obj *ret_buffer;
+  char *label;
+  char *unique_label;
+  Node *goto_next;
 
-    char *label;
-    char *unique_label;
-    Node *goto_next;
-
-    Node *case_next;
-    Node *case_default;
-    long begin;
-    long end;
-    char *asm_str;
-    Node *cas_addr;
-    Node *cas_old;
-    Node *cas_new;
-
-    Obj *var;
-    Obj *atomic_addr;
-    Node *atomic_expr;
-    int64_t val;
-    long double fval;
+  Node *case_next;
+  Node *default_case;
 
 
+  long begin;
+  long end;
+
+  char *asm_str;
+  Node *cas_addr;
+  Node *cas_old;
+  Node *cas_new;
+  Obj *atomic_addr;
+  Node *atomic_expr;
+
+  Obj *var;
+  int64_t val;
+  long double fval;
 };
+
 
 Node *new_cast(Node *expr,Type *ty);
 int64_t const_expr(Token **res,Token *tok);
