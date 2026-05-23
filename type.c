@@ -87,3 +87,199 @@ bool is_compatible(Type *t1, Type *t2) {
   }
   return false;
 }
+Type *copy_type(Type *ty){
+    Type *ret=calloc(1,sizeof(Type));
+    *ret=*ty;
+    ret->origin=ty;
+    return ret;
+}
+
+Type *pointer_to(Type *base){
+    Type *ty=new_type(TY_PTR,8,8);
+    ty->base=base;
+    ty->is_unsigned=true;
+    return ty;
+
+}
+Type *vla_of(Type *base,Node *len){
+    Type *ty=new_type(TY_VLA,8,8);
+    ty->base=base;
+    ty->vla_len=len;
+    return ty;
+}
+
+Type *enum_type(void){
+    return new_type(TY_ENUM,4,4);
+}
+
+Type *struct_type(void){
+    return new_type(TY_STRUCT,0,1);
+}
+
+static Type *get_common_type(Type *t1,Type *t2){
+    if(t1->base){
+        return pointer_to(t1->base);
+    }
+    if(t1->kind==TY_FUNC){
+        return pointer_to(t1);
+    }
+    if(t2->kind==TY_FUNC){
+        return pointer_to(t2);
+    }
+     if (t1->kind == TY_LDOUBLE || t2->kind == TY_LDOUBLE)
+    return ty_ldouble;
+  if (t1->kind == TY_DOUBLE || t2->kind == TY_DOUBLE)
+    return ty_double;
+  if (t1->kind == TY_FLOAT || t2->kind == TY_FLOAT)
+    return ty_float;
+
+  if (t1->size < 4)
+    t1 = ty_int;
+  if (t2->size < 4)
+    t2 = ty_int;
+
+  if (t1->size != t2->size)
+    return (t1->size < t2->size) ? t2 : t1;
+
+  if (t2->is_unsigned)
+    return t2;
+  return t1;
+}
+
+static void usual_arith_conv(Node **lhs,Node **rhs){
+    Type *ty=get_common_type((*lhs)->ty,(*rhs)->ty);
+    *lhs=new_cast(*lhs,ty);
+    *rhs=new_cast(*rhs,ty);
+}
+
+
+void add_type(Node *node){
+    if(!node || node->ty){
+        return;
+    }
+    add_type(node->lhs);
+    add_type(node->rhs);
+    add_type(node->cond);
+    add_type(node->then);
+    add_type(node->els);
+    add_type(node->init);
+    add_type(node->inc);
+
+    for (Node *n = node->body; n; n = n->next)
+        add_type(n);
+    for (Node *n = node->args; n; n = n->next)
+        add_type(n);
+    switch (node->kind) {
+  case ND_NUM:
+    node->ty = ty_int;
+    return;
+  case ND_ADD:
+  case ND_SUB:
+  case ND_MUL:
+  case ND_DIV:
+  case ND_MOD:
+  case ND_BITAND:
+  case ND_BITOR:
+  case ND_BITXOR:
+    usual_arith_conv(&node->lhs, &node->rhs);
+    node->ty = node->lhs->ty;
+    return;
+  case ND_NEG: {
+    Type *ty = get_common_type(ty_int, node->lhs->ty);
+    node->lhs = new_cast(node->lhs, ty);
+    node->ty = ty;
+    return;
+  }
+  case ND_ASSIGN:
+    if (node->lhs->ty->kind == TY_ARRAY)
+      error_tok(node->lhs->tok, "not an lvalue");
+    if (node->lhs->ty->kind != TY_STRUCT)
+      node->rhs = new_cast(node->rhs, node->lhs->ty);
+    node->ty = node->lhs->ty;
+    return;
+  case ND_EQ:
+  case ND_NE:
+  case ND_LT:
+  case ND_LE:
+    usual_arith_conv(&node->lhs, &node->rhs);
+    node->ty = ty_int;
+    return;
+  case ND_FUNCALL:
+    node->ty = node->func_ty->return_ty;
+    return;
+  case ND_NOT:
+  case ND_LOGOR:
+  case ND_LOGAND:
+    node->ty = ty_int;
+    return;
+  case ND_BITNOT:
+  case ND_SHL:
+  case ND_SHR:
+    node->ty = node->lhs->ty;
+    return;
+  case ND_VAR:
+  case ND_VLA_PTR:
+    node->ty = node->var->ty;
+    return;
+  case ND_COND:
+    if (node->then->ty->kind == TY_VOID || node->els->ty->kind == TY_VOID) {
+      node->ty = ty_void;
+    } else {
+      usual_arith_conv(&node->then, &node->els);
+      node->ty = node->then->ty;
+    }
+    return;
+  case ND_COMMA:
+    node->ty = node->rhs->ty;
+    return;
+  case ND_MEMBER:
+    node->ty = node->member->ty;
+    return;
+  case ND_ADDR: {
+    Type *ty = node->lhs->ty;
+    if (ty->kind == TY_ARRAY)
+      node->ty = pointer_to(ty->base);
+    else
+      node->ty = pointer_to(ty);
+    return;
+  }
+  case ND_DEREF:
+    if (!node->lhs->ty->base)
+      error_tok(node->tok, "invalid pointer dereference");
+    if (node->lhs->ty->base->kind == TY_VOID)
+      error_tok(node->tok, "dereferencing a void pointer");
+
+    node->ty = node->lhs->ty->base;
+    return;
+  case ND_STMT_EXPR:
+    if (node->body) {
+      Node *stmt = node->body;
+      while (stmt->next)
+        stmt = stmt->next;
+      if (stmt->kind == ND_EXPR_STMT) {
+        node->ty = stmt->lhs->ty;
+        return;
+      }
+    }
+    error_tok(node->tok, "statement expression returning void is not supported");
+    return;
+  case ND_LABEL_VAL:
+    node->ty = pointer_to(ty_void);
+    return;
+  case ND_CAS:
+    add_type(node->cas_addr);
+    add_type(node->cas_old);
+    add_type(node->cas_new);
+    node->ty = ty_bool;
+
+    if (node->cas_addr->ty->kind != TY_PTR)
+      error_tok(node->cas_addr->tok, "pointer expected");
+    if (node->cas_old->ty->kind != TY_PTR)
+      error_tok(node->cas_old->tok, "pointer expected");
+    return;
+  case ND_EXCH:
+    if (node->lhs->ty->kind != TY_PTR)
+      error_tok(node->cas_addr->tok, "pointer expected");
+    node->ty = node->lhs->ty->base;
+    return;
+}}
